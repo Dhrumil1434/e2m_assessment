@@ -2,6 +2,8 @@
 
 Python FastAPI service for image analysis, segmentation, material preview rendering, and optional ComfyUI inpainting.
 
+Called **only by Nest** (`AI_WORKER_URL`). Not browser-facing. System overview: [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md).
+
 ## Requirements
 
 - **Python 3.11 or 3.12 recommended**
@@ -49,7 +51,7 @@ python main.py --port 8188 --lowvram
 # LM Studio — load a small instruct model, enable local server on port 1234
 ```
 
-Download `d-sv1-5-inpainting.ckpt` into ComfyUI's `models/checkpoints/` folder.
+Download `sd-v1-5-inpainting.ckpt` into ComfyUI's `models/checkpoints/` folder.
 
 Set in `ai-worker/.env`:
 

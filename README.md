@@ -1,11 +1,80 @@
 # E2M House Renovation AI
 
-Monorepo for the house renovation MVP:
+Monorepo MVP: upload a house photo → detect surfaces → apply materials → measure → estimate cost → PDF report.
 
-- `backend/` — NestJS API (Drizzle ORM, BullMQ, MinIO, deterministic estimation)
-- `frontend/` — React web app (Vite, TanStack Query, React-Konva renovation studio)
-- `ai-worker/` — Python FastAPI worker (Grounded SAM stub + OpenCV rendering)
-- `infrastructure/` — Docker Compose for local development
+**How the stack fits together:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · [all docs](docs/README.md)
+
+Browsers only talk to the frontend (and Nest via `/api`). MinIO, the AI worker, and ComfyUI stay on localhost.
+
+## What’s in each package
+
+| Package | Port | Implements |
+|---------|------|------------|
+| [`frontend/`](frontend/README.md) | 5173 | Workflow UI + Konva renovation studio |
+| [`backend/`](backend/README.md) | 3000 | Nest API, queues, estimation, PDF, asset proxy |
+| [`ai-worker/`](ai-worker/README.md) | **8002** (local) | Segmentation, OpenCV composite, optional ComfyUI inpaint |
+| [`infrastructure/`](infrastructure/README.md) | 5432 / 6379 / 9000 | Postgres, Redis, MinIO (Docker) |
+| ComfyUI (external) | 8188 | Optional GPU photoreal Apply Material |
+
+## Tech stack summaries
+
+### Frontend (`frontend/`)
+
+| Used for | Technology |
+|----------|------------|
+| App shell & build | React 19, TypeScript, Vite 8 |
+| Routing | React Router |
+| Server data (API) | TanStack Query + Axios |
+| Canvas / selection UI state | Zustand |
+| Renovation studio canvas | React-Konva / Konva |
+| Styling & UI primitives | Tailwind CSS v4, Radix, Lucide, Motion |
+| Forms / validation | React Hook Form, Zod |
+
+**Implements:** projects, upload, analyze polling, design studio (masks + materials), measure, estimate, report download. Proxies `/api` → Nest when sharing via ngrok.
+
+### Backend (`backend/`)
+
+| Used for | Technology |
+|----------|------------|
+| HTTP API | NestJS 11, Swagger |
+| Validation / config | class-validator, `@nestjs/config` |
+| Database | PostgreSQL + Drizzle ORM |
+| Async jobs | BullMQ + Redis (ioredis) |
+| Object storage | MinIO via AWS S3 SDK |
+| Image helpers | Sharp |
+| PDF reports | PDFKit |
+| AI worker calls | Axios |
+| Rate limiting | Nest Throttler |
+
+**Implements:** projects/images, job enqueue + status, regions/materials, measurement math, deterministic cost estimation, PDF generation, MinIO asset proxy for the browser.
+
+### AI worker (`ai-worker/`)
+
+| Used for | Technology |
+|----------|------------|
+| Internal HTTP API | FastAPI + Uvicorn |
+| Instant material previews | OpenCV + NumPy + Pillow |
+| Optional segmentation | SAM2 (flag-gated) |
+| Optional photoreal apply | ComfyUI SD 1.5 inpaint (HTTP client) |
+| Optional prompts | LM Studio (local OpenAI-compatible API) |
+
+**Implements:** `/internal/segment`, composite-design, render, inpaint (with OpenCV fallback). Stub mode for CI. Not called from the browser.
+
+### Infrastructure (`infrastructure/`)
+
+| Used for | Technology |
+|----------|------------|
+| Relational data | PostgreSQL 16 |
+| Job queues | Redis 7 |
+| Files / images / PDFs | MinIO (S3-compatible) |
+| Optional containers | Docker Compose (`api`, `ai-worker`) |
+
+### Sharing & GPU helpers (`scripts/`, docs)
+
+| Used for | Technology |
+|----------|------------|
+| Public demo URL | ngrok → Vite `:5173` (Nest via Vite `/api` proxy) |
+| Photoreal Apply Material | ComfyUI on `:8188` (`scripts/start-comfyui.ps1`) |
 
 ## Quick start
 
@@ -15,13 +84,15 @@ Monorepo for the house renovation MVP:
 cp .env.example .env
 ```
 
+Also keep a matching `backend/.env` (Nest loads from its cwd). Frontend: `frontend/.env` from `frontend/.env.example`.
+
 2. Start infrastructure:
 
 ```bash
 docker compose -f infrastructure/docker-compose.yml up -d postgres redis minio
 ```
 
-3. Backend setup:
+3. Backend:
 
 ```bash
 cd backend
@@ -29,28 +100,29 @@ npm install
 npm run db:generate
 npm run db:migrate
 npm run db:seed
+npm run db:seed-textures
 npm run start:dev
 ```
 
-4. AI worker (Python 3.11/3.12 recommended):
+4. AI worker (Python **3.11/3.12** recommended) — port **8002**:
 
 ```bash
 cd ai-worker
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+.\start.ps1
 ```
 
-If local pip fails on Windows (common with Python 3.14), use Docker instead:
+If local pip fails on Windows (common with Python 3.14), use Docker:
 
 ```bash
 docker compose -f infrastructure/docker-compose.yml up -d ai-worker
 ```
 
-See [`ai-worker/README.md`](ai-worker/README.md) for troubleshooting.
+Then set Nest `AI_WORKER_URL=http://localhost:8000` (Compose host port). See [`ai-worker/README.md`](ai-worker/README.md).
 
-5. Frontend (requires backend running):
+5. Frontend:
 
 ```bash
 cd frontend
@@ -59,38 +131,33 @@ cp .env.example .env
 pnpm dev
 ```
 
-Open `http://localhost:5173`. See [`frontend/README.md`](frontend/README.md).
+Open `http://localhost:5173`.
+
+Optional GPU renders: start ComfyUI on `:8188` (`scripts/start-comfyui.ps1`) with `AI_WORKER_USE_COMFY=true`.
 
 ## Share via ngrok
 
-Free ngrok supports **one** public URL. Tunnel Vite (`:5173`); the API is proxied through Vite at `/api`.
+Free ngrok = **one** public URL. Tunnel Vite (`:5173`); Nest is reached through Vite’s `/api` proxy.
 
 ```powershell
-# Stop any ngrok pointing at :80 first
 .\scripts\start-ngrok.ps1
-# Other terminal:
 .\scripts\apply-ngrok-env.ps1
 # Restart Nest + Vite, open the printed HTTPS URL
 ```
 
-Full guide: [`docs/TUNNELING.md`](docs/TUNNELING.md).
+Details: [`docs/TUNNELING.md`](docs/TUNNELING.md).
 
-## API docs
+## API
 
 - Swagger: `http://localhost:3000/docs`
 - Health: `GET /api/v1/health`
 
-## MVP flow
+## Product flow
 
-1. `POST /api/v1/projects`
-2. `POST /api/v1/projects/:id/images`
-3. `POST /api/v1/projects/:id/images/:imageId/analyze`
-4. `GET /api/v1/jobs/:id`
-5. `PATCH /api/v1/regions/:id` (confirm regions)
-6. `POST /api/v1/regions/:id/materials`
-7. `POST /api/v1/regions/:id/preview`
-8. `POST /api/v1/projects/:id/measurements`
-9. `POST /api/v1/projects/:id/estimate-areas`
-10. `POST /api/v1/projects/:id/estimate-quantities`
-11. `POST /api/v1/projects/:id/estimate-cost`
-12. `POST /api/v1/projects/:id/reports`
+1. Create project → upload facade image  
+2. Analyze (segmentation → regions + masks)  
+3. Design studio (confirm regions, materials, OpenCV / AI apply)  
+4. Measure areas → estimate quantities & cost  
+5. Generate and download PDF report  
+
+API sequence and module detail: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).

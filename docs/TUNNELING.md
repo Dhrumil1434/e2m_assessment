@@ -1,5 +1,7 @@
 # Share E2M over the internet with ngrok (free plan)
 
+Service roles and ports: [`ARCHITECTURE.md`](./ARCHITECTURE.md).
+
 Keep Postgres, Redis, MinIO, the AI worker, and ComfyUI on `localhost`.
 
 **Free ngrok allows one public URL.** E2M uses a single tunnel:
