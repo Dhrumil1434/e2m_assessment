@@ -18,5 +18,12 @@ export default defineConfig({
     port: 5173,
     // Allow ngrok / tunnel Host headers in local sharing mode
     allowedHosts: true,
+    // Free ngrok = 1 public URL. Proxy API so SPA + Nest share one tunnel.
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:3000',
+        changeOrigin: true,
+      },
+    },
   },
 })

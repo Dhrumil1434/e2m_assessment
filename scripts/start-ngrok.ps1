@@ -1,54 +1,75 @@
-# Dual ngrok tunnels for E2M (frontend :5173 + API :3000)
-# Requires: ngrok installed and authenticated (ngrok config add-authtoken <token>)
+# Single ngrok tunnel for E2M (free plan = one public URL)
+# Forwards https://*.ngrok-free.dev -> localhost:5173
+# Vite proxies /api -> localhost:3000 (see frontend/vite.config.ts)
 #
 # Usage:
-#   .\scripts\start-ngrok.ps1
-# Then copy the printed HTTPS URLs into backend/.env + frontend/.env (or apply .env.ngrok)
-# and restart Nest + Vite.
+#   1. Stop any existing ngrok session (Ctrl-C) — especially ones pointing at :80
+#   2. .\scripts\start-ngrok.ps1
+#   3. In another terminal: .\scripts\apply-ngrok-env.ps1
+#   4. Restart Nest + Vite, open the printed HTTPS URL
 
 $ErrorActionPreference = "Stop"
 
-function Assert-Command($name) {
-  if (-not (Get-Command $name -ErrorAction SilentlyContinue)) {
-    Write-Error "'$name' not found on PATH. Install from https://ngrok.com/download"
-  }
+function Get-NgrokVersion([string]$exe) {
+  try {
+    $out = & $exe version 2>&1 | Out-String
+    if ($out -match '(\d+)\.(\d+)\.(\d+)') {
+      return [version]"$($Matches[1]).$($Matches[2]).$($Matches[3])"
+    }
+  } catch {}
+  return [version]"0.0.0"
 }
 
-Assert-Command ngrok
+function Find-NgrokExe {
+  $candidates = @()
+  $cmd = Get-Command ngrok -ErrorAction SilentlyContinue
+  if ($cmd) { $candidates += $cmd.Source }
 
-$configDir = Join-Path $env:USERPROFILE ".ngrok-e2m"
-New-Item -ItemType Directory -Force -Path $configDir | Out-Null
-$configPath = Join-Path $configDir "ngrok.yml"
+  $searchRoots = @(
+    (Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Packages"),
+    (Join-Path $env:LOCALAPPDATA "ngrok"),
+    (Join-Path $env:USERPROFILE "AppData\Local")
+  )
+  foreach ($root in $searchRoots) {
+    if (-not (Test-Path $root)) { continue }
+    Get-ChildItem -Path $root -Filter ngrok.exe -Recurse -ErrorAction SilentlyContinue |
+      Select-Object -First 5 |
+      ForEach-Object { $candidates += $_.FullName }
+  }
 
-@"
-version: "2"
-tunnels:
-  e2m-frontend:
-    addr: 5173
-    proto: http
-  e2m-api:
-    addr: 3000
-    proto: http
-"@ | Set-Content -Path $configPath -Encoding UTF8
+  $best = $null
+  $bestVer = [version]"0.0.0"
+  foreach ($path in ($candidates | Select-Object -Unique)) {
+    $ver = Get-NgrokVersion $path
+    if ($ver -gt $bestVer) {
+      $bestVer = $ver
+      $best = $path
+    }
+  }
 
-Write-Host "Starting ngrok tunnels (frontend:5173, api:3000)..."
-Write-Host "Config: $configPath"
+  if (-not $best) {
+    Write-Error "ngrok not found. Install from https://ngrok.com/download (need 3.20+)"
+  }
+  if ($bestVer -lt [version]"3.20.0") {
+    Write-Warning "Found ngrok $bestVer at $best — account may require 3.20+. Update: open ngrok and press Ctrl-U, or reinstall from ngrok.com/download"
+  }
+
+  return @{ Path = $best; Version = $bestVer }
+}
+
+$ngrok = Find-NgrokExe
+Write-Host "Using ngrok $($ngrok.Version) at $($ngrok.Path)"
+Write-Host "Starting single tunnel -> http://127.0.0.1:5173"
 Write-Host "Inspector: http://127.0.0.1:4040"
 Write-Host ""
-Write-Host "After tunnels are up, run in another terminal:"
-Write-Host "  .\scripts\apply-ngrok-env.ps1"
-Write-Host "Then restart backend and frontend."
+Write-Host "IMPORTANT: Stop other ngrok agents first (free plan allows one)."
+Write-Host "After this is online, run: .\scripts\apply-ngrok-env.ps1"
 Write-Host ""
 
-# Prefer local agent config if present; otherwise use generated tunnel file with --config
-$agentConfig = Join-Path $env:LOCALAPPDATA "ngrok\ngrok.yml"
-if (-not (Test-Path $agentConfig)) {
-  $agentConfig = Join-Path $env:USERPROFILE ".ngrok2\ngrok.yml"
+Get-Process ngrok -ErrorAction SilentlyContinue | ForEach-Object {
+  Write-Host "Stopping existing ngrok PID $($_.Id)..."
+  Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
 }
+Start-Sleep -Seconds 1
 
-if (Test-Path $agentConfig) {
-  ngrok start --all --config $agentConfig --config $configPath
-} else {
-  Write-Host "No ngrok authtoken config found. Run: ngrok config add-authtoken <token>"
-  ngrok start --all --config $configPath
-}
+& $ngrok.Path http 5173

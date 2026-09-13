@@ -63,11 +63,15 @@ Open `http://localhost:5173`. See [`frontend/README.md`](frontend/README.md).
 
 ## Share via ngrok
 
-To let others use your local stack (including ComfyUI on your NVIDIA GPU) over HTTPS:
+Free ngrok supports **one** public URL. Tunnel Vite (`:5173`); the API is proxied through Vite at `/api`.
 
-1. Start infra, backend, ai-worker, frontend (and ComfyUI if needed)
-2. Run `.\scripts\start-ngrok.ps1` then `.\scripts\apply-ngrok-env.ps1`
-3. Copy the printed URLs into `backend/.env` / `frontend/.env` and restart Nest + Vite
+```powershell
+# Stop any ngrok pointing at :80 first
+.\scripts\start-ngrok.ps1
+# Other terminal:
+.\scripts\apply-ngrok-env.ps1
+# Restart Nest + Vite, open the printed HTTPS URL
+```
 
 Full guide: [`docs/TUNNELING.md`](docs/TUNNELING.md).
 
