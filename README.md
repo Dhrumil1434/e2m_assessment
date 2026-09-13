@@ -1,3 +1,7 @@
+
+
+https://github.com/user-attachments/assets/b403c9a6-7565-447a-829a-a4072799e20d
+
 # E2M House Renovation AI
 
 Monorepo MVP: upload a house photo → detect surfaces → apply materials → measure → estimate cost → PDF report.
