@@ -1,0 +1,73 @@
+{
+  "3": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 42,
+      "steps": 20,
+      "cfg": 7.0,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "denoise": 0.75,
+      "model": ["4", 0],
+      "positive": ["6", 0],
+      "negative": ["7", 0],
+      "latent_image": ["11", 0]
+    }
+  },
+  "4": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "sd-v1-5-inpainting.ckpt"
+    }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "__PROMPT__",
+      "clip": ["4", 1]
+    }
+  },
+  "7": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "__NEGATIVE__",
+      "clip": ["4", 1]
+    }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": ["3", 0],
+      "vae": ["4", 2]
+    }
+  },
+  "9": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "e2m_inpaint",
+      "images": ["8", 0]
+    }
+  },
+  "10": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "__INIT__"
+    }
+  },
+  "11": {
+    "class_type": "VAEEncodeForInpaint",
+    "inputs": {
+      "pixels": ["10", 0],
+      "vae": ["4", 2],
+      "mask": ["12", 0],
+      "grow_mask_by": 6
+    }
+  },
+  "12": {
+    "class_type": "LoadImageMask",
+    "inputs": {
+      "image": "__MASK__",
+      "channel": "red"
+    }
+  }
+}

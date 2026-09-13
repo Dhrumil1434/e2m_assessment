@@ -1,0 +1,62 @@
+# Secrets & local env
+.env
+.env.*
+!.env.example
+!**/.env.example
+.env.ngrok
+
+# Dependencies
+node_modules/
+.pnpm-store/
+frontend/node_modules/
+backend/node_modules/
+
+# Builds
+dist/
+build/
+frontend/dist/
+backend/dist/
+*.tsbuildinfo
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+ai-worker/.venv/
+ai-worker/checkpoints/
+*.pt
+
+# ML / ComfyUI (external install — do not commit weights)
+ComfyUI/
+**/models/checkpoints/
+*.ckpt
+*.safetensors
+*.onnx
+*.bin
+
+# Storage / local data
+.minio/
+postgres_data/
+redis_data/
+
+# IDE / OS / agents
+.idea/
+.vscode/
+.cursor/
+*.swp
+.DS_Store
+Thumbs.db
+agent-transcripts/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Coverage / caches
+coverage/
+.turbo/
+.cache/

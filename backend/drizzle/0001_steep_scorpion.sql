@@ -1,0 +1,1 @@
+ALTER TABLE "project_images" ADD COLUMN "design_storage_key" varchar(512);
